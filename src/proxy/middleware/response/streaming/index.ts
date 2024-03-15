@@ -35,6 +35,16 @@ export type StreamingCompletionTransformer<
   state?: S;
 };
 
+export function eventIsOpenAIEvent(
+  event: any
+): event is OpenAIChatCompletionStreamEvent {
+  return event?.object === "chat.completion.chunk";
+}
+
+export function eventIsAnthropicV2Event(event: any): event is AnthropicV2StreamEvent {
+  return "completion" in event;
+}
+
 export { openAITextToOpenAIChat } from "./transformers/openai-text-to-openai";
 export { anthropicV1ToOpenAI } from "./transformers/anthropic-v1-to-openai";
 export { anthropicV2ToOpenAI } from "./transformers/anthropic-v2-to-openai";

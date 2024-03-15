@@ -15,6 +15,7 @@ import { getAwsEventStreamDecoder } from "./streaming/aws-event-stream-decoder";
 import { EventAggregator } from "./streaming/event-aggregator";
 import { SSEMessageTransformer } from "./streaming/sse-message-transformer";
 import { SSEStreamAdapter } from "./streaming/sse-stream-adapter";
+import { Counter } from "./streaming/counter";
 import { buildSpoofedSSE, sendErrorToClient } from "./error-generator";
 import { BadRequestError } from "../../../shared/errors";
 
@@ -93,11 +94,20 @@ export const handleStreamedResponse: RawResponseBodyHandler = async (
       if (!prefersNativeEvents) res.write(`data: ${JSON.stringify(msg)}\n\n`);
       aggregator.addEvent(msg);
     });
+  // Counter counts tokens and increases quota usage. Does not transform events.
+  const counter = new Counter({
+    key: req.key!,
+    inboundApi: req.inboundApi,
+    logger: req.log,
+    requestedModel: req.body.model,
+    user: req.user,
+    inputTokens: req.promptTokens ?? 0,
+  });
 
   try {
     await Promise.race([
       handleAbortedStream(req, res),
-      pipelineAsync(proxyRes, decoder, adapter, transformer),
+      pipelineAsync(proxyRes, decoder, adapter, transformer, counter),
     ]);
     req.log.debug(`Finished proxying SSE stream.`);
     res.end();

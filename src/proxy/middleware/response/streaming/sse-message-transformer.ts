@@ -13,6 +13,7 @@ import {
   openAITextToOpenAIChat,
   passthroughToOpenAI,
   StreamingCompletionTransformer,
+  eventIsOpenAIEvent,
 } from "./index";
 
 type SSEMessageTransformerOptions = TransformOptions & {
@@ -110,12 +111,6 @@ export class SSEMessageTransformer extends Transform {
       callback(err);
     }
   }
-}
-
-function eventIsOpenAIEvent(
-  event: any
-): event is OpenAIChatCompletionStreamEvent {
-  return event?.object === "chat.completion.chunk";
 }
 
 function getTransformer(

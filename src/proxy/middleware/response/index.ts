@@ -99,8 +99,9 @@ export const createOnProxyResHandler = (apiMiddleware: ProxyResMiddleware) => {
         // we can only execute middleware that doesn't write to the response.
         middlewareStack.push(
           trackRateLimit,
-          countResponseTokens,
-          incrementUsage,
+          // No need to add `countResponseTokens` or `incrementUsage`
+          // because the streaming handler already counts tokens and
+          // increments quota usage as events come in.
           logPrompt
         );
       } else {
