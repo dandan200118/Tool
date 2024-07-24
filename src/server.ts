@@ -21,7 +21,7 @@ import { start as startRequestQueue } from "./proxy/queue";
 import { init as initUserStore } from "./shared/users/user-store";
 import { init as initTokenizers } from "./shared/tokenization";
 import { checkOrigin } from "./proxy/check-origin";
-import { sendErrorToClient } from "./proxy/middleware/response/error-generator";
+//import { sendErrorToClient } from "./proxy/middleware/response/error-generator";
 import { initializeDatabase, getDatabase } from "./shared/database";
 
 const PORT = config.port;
