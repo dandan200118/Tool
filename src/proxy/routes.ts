@@ -9,7 +9,7 @@ import { mistralAI } from "./mistral-ai";
 import { aws } from "./aws";
 import { gcp } from "./gcp";
 import { azure } from "./azure";
-import { sendErrorToClient } from "./middleware/response/error-generator";
+//import { sendErrorToClient } from "./middleware/response/error-generator";
 
 const proxyRouter = express.Router();
 proxyRouter.use((req, _res, next) => {
