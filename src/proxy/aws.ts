@@ -17,7 +17,7 @@ import {
   createOnProxyResHandler,
 } from "./middleware/response";
 import { transformAnthropicChatResponseToAnthropicText, transformAnthropicChatResponseToOpenAI } from "./anthropic";
-import { sendErrorToClient } from "./middleware/response/error-generator";
+//import { sendErrorToClient } from "./middleware/response/error-generator";
 
 const LATEST_AWS_V2_MINOR_VERSION = "1";
 
