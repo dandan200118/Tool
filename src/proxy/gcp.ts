@@ -17,7 +17,7 @@ import {
   createOnProxyResHandler,
 } from "./middleware/response";
 import { transformAnthropicChatResponseToOpenAI } from "./anthropic";
-import { sendErrorToClient } from "./middleware/response/error-generator";
+//import { sendErrorToClient } from "./middleware/response/error-generator";
 
 const LATEST_GCP_SONNET_MINOR_VERSION = "20240229";
 
