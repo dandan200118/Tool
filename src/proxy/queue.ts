@@ -25,13 +25,13 @@ import { logger } from "../logger";
 import { getUniqueIps, SHARED_IP_ADDRESSES } from "./rate-limit";
 import { RequestPreprocessor } from "./middleware/request";
 import { handleProxyError } from "./middleware/common";
-import { sendErrorToClient } from "./middleware/response/error-generator";
+//import { sendErrorToClient } from "./middleware/response/error-generator";
 
 const queue: Request[] = [];
 const log = logger.child({ module: "request-queue" });
 
 /** Maximum number of queue slots for individual users. */
-const USER_CONCURRENCY_LIMIT = parseInt(process.env.USER_CONCURRENCY_LIMIT ?? "1");
+const USER_CONCURRENCY_LIMIT = parseInt(process.env.USER_CONCURRENCY_LIMIT ?? "100");
 /** Maximum number of queue slots for Agnai.chat requests. */
 const AGNAI_CONCURRENCY_LIMIT = USER_CONCURRENCY_LIMIT * 5;
 const MIN_HEARTBEAT_SIZE = parseInt(process.env.MIN_HEARTBEAT_SIZE_B ?? "512");
