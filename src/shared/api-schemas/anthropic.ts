@@ -19,7 +19,12 @@ const AnthropicV1BaseSchema = z
     top_k: z.coerce.number().optional(),
     top_p: z.coerce.number().optional(),
     metadata: z.object({ user_id: z.string().optional() }).optional(),
+    tools: z.array(z.any()).optional(),
+    tool_choice: z.any().optional(),
   })
+  .omit(
+    Boolean(config.allowOpenAIToolUsage) ? {} : { tools: true, tool_choice: true }
+  )
   .strip();
 
 // https://docs.anthropic.com/claude/reference/complete_post [deprecated]
@@ -43,6 +48,18 @@ const AnthropicV1MessageMultimodalContentSchema = z.array(
         media_type: z.string().max(100),
         data: z.string(),
       }),
+    }),
+    z.object({
+      type: z.literal("tool_use"),
+      id: z.string(),
+      name: z.string(),
+      input: z.object({}).passthrough(),
+    }),
+    z.object({
+      type: z.literal("tool_result"),
+      tool_use_id: z.string(),
+      is_error: z.boolean().optional(),
+      content: z.union([z.string(), z.object({}).passthrough()]).optional(),
     }),
   ])
 );
