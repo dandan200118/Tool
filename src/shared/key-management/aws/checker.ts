@@ -1,11 +1,9 @@
 import { Sha256 } from "@aws-crypto/sha256-js";
-import { QueryParameterBag } from "@smithy/types";
 import { SignatureV4 } from "@smithy/signature-v4";
 import { HttpRequest } from "@smithy/protocol-http";
 import axios, { AxiosError, AxiosHeaders, AxiosRequestConfig } from "axios";
 import { URL } from "url";
 import { config } from "../../../config";
-import { logger } from "../../../logger";
 import { getAwsBedrockModelFamily } from "../../models";
 import { KeyCheckerBase } from "../key-checker-base";
 import type { AwsBedrockKey, AwsBedrockKeyProvider } from "./provider";
@@ -257,6 +255,10 @@ See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-
       status === 403 &&
       errorMessage?.match(/access to the model with the specified model ID/)
     ) {
+      this.log.debug(
+        { key: key.hash, model, errorType, data, status, headers },
+        "Model is not available (principal does not have access)."
+      );
       return false;
     }
 
@@ -265,7 +267,7 @@ See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-
     if (status === 404) {
       this.log.debug(
         { region: creds.region, model, key: key.hash },
-        "Model not supported in this AWS region."
+        "Model is not available (not supported in this AWS region)."
       );
       return false;
     }
@@ -277,14 +279,14 @@ See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-
     if (!correctErrorType || !correctErrorMessage) {
       this.log.debug(
         { key: key.hash, model, errorType, data, status },
-        "AWS InvokeModel test unsuccessful."
+        "Model is not available (request rejected)."
       );
       return false;
     }
 
     this.log.debug(
       { key: key.hash, model, errorType, data, status },
-      "AWS InvokeModel test successful."
+      "Model is available."
     );
     return true;
   }
@@ -318,7 +320,7 @@ See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-
     if (status === 403 || status === 404) {
       this.log.debug(
         { key: key.hash, model, errorType, data, status },
-        "AWS InvokeModel test returned 403 or 404."
+        "Model is not available (no access or unsupported region)."
       );
       return false;
     }
@@ -328,14 +330,14 @@ See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-
     if (isBadRequest && !isValidationError) {
       this.log.debug(
         { key: key.hash, model, errorType, data, status, headers },
-        "AWS InvokeModel test returned 400 but not a validation error."
+        "Model is not available (request rejected)."
       );
       return false;
     }
 
     this.log.debug(
       { key: key.hash, model, errorType, data, status },
-      "AWS InvokeModel test successful."
+      "Model is available."
     );
     return true;
   }
