@@ -1,12 +1,12 @@
 import { Sha256 } from "@aws-crypto/sha256-js";
 import { SignatureV4 } from "@smithy/signature-v4";
 import { HttpRequest } from "@smithy/protocol-http";
-import axios, { AxiosError, AxiosRequestConfig, AxiosHeaders } from "axios";
+import axios, { AxiosError, AxiosHeaders, AxiosRequestConfig } from "axios";
 import { URL } from "url";
+import { config } from "../../../config";
+import { getAwsBedrockModelFamily } from "../../models";
 import { KeyCheckerBase } from "../key-checker-base";
 import type { AwsBedrockKey, AwsBedrockKeyProvider } from "./provider";
-import { getAwsBedrockModelFamily } from "../../models";
-import { config } from "../../../config";
 
 type ParentModelId = string;
 type AliasModelId = string;
@@ -24,6 +24,7 @@ const KNOWN_MODEL_IDS: ModuleAliasTuple[] = [
   ["mistral.mistral-large-2407-v1:0"],
   ["mistral.mistral-small-2402-v1:0"], // Seems to return 400
 ];
+
 const MIN_CHECK_INTERVAL = 3 * 1000; // 3 seconds
 const KEY_CHECK_PERIOD = 90 * 60 * 1000; // 90 minutes
 const AMZ_HOST =
@@ -31,6 +32,8 @@ const AMZ_HOST =
 const GET_CALLER_IDENTITY_URL = `https://sts.amazonaws.com/?Action=GetCallerIdentity&Version=2011-06-15`;
 const GET_INVOCATION_LOGGING_CONFIG_URL = (region: string) =>
   `https://bedrock.${region}.amazonaws.com/logging/modelinvocations`;
+const GET_LIST_INFERENCE_PROFILES_URL = (region: string) =>
+  `https://bedrock.${region}.amazonaws.com/inference-profiles?maxResults=1000`;
 const POST_INVOKE_MODEL_URL = (region: string, model: string) =>
   `https://${AMZ_HOST.replace("%REGION%", region)}/model/${model}/invoke`;
 const TEST_MESSAGES = [
@@ -39,6 +42,22 @@ const TEST_MESSAGES = [
 ];
 
 type AwsError = { error: {} };
+
+type GetInferenceProfilesResponse = {
+  inferenceProfileSummaries: {
+    inferenceProfileId: string;
+    inferenceProfileName: string;
+    inferenceProfileArn: string;
+    description?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    status: "ACTIVE" | unknown;
+    type: "SYSTEM_DEFINED" | unknown;
+    models: {
+      modelArn?: string;
+    }[];
+  }[];
+};
 
 type GetLoggingConfigResponse = {
   loggingConfig: null | {
@@ -66,37 +85,51 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
     const isInitialCheck = !key.lastChecked;
 
     if (isInitialCheck) {
-      // Perform checks for all parent model IDs
-      const results = await Promise.all(
-        KNOWN_MODEL_IDS.filter(([model]) =>
-          // Skip checks for models that are disabled anyway
-          config.allowedModelFamilies.includes(getAwsBedrockModelFamily(model))
-        ).map(async ([model, ...aliases]) => ({
-          models: [model, ...aliases],
-          success: await this.invokeModel(model, key),
-        }))
-      );
-
-      // Filter out models that are disabled
-      const modelIds = results
-        .filter(({ success }) => success)
-        .flatMap(({ models }) => models);
-
-      if (modelIds.length === 0) {
+      try {
+        await this.checkInferenceProfiles(key);
+      } catch (e) {
+        const asError = e as AxiosError<AwsError>;
+        const data = asError.response?.data;
         this.log.warn(
-          { key: key.hash },
-          "Key does not have access to any models; disabling."
+          { key: key.hash, error: e.message, data },
+          "Cannot list inference profiles.\n\
+Principal may be missing `AmazonBedrockFullAccess`, or has no policy allowing action `bedrock:ListInferenceProfiles` against resource `arn:aws:bedrock:*:*:inference-profile/*`.\n\
+Requests will be made without inference profiles using on-demand quotas, which may be subject to more restrictive rate limits.\n\
+See https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference-prereq.html."
         );
-        return this.updateKey(key.hash, { isDisabled: true });
       }
-
-      this.updateKey(key.hash, {
-        modelIds,
-        modelFamilies: Array.from(
-          new Set(modelIds.map(getAwsBedrockModelFamily))
-        ),
-      });
     }
+
+    // Perform checks for all parent model IDs
+    const results = await Promise.all(
+      KNOWN_MODEL_IDS.filter(([model]) =>
+        // Skip checks for models that are disabled anyway
+        config.allowedModelFamilies.includes(getAwsBedrockModelFamily(model))
+      ).map(async ([model, ...aliases]) => ({
+        models: [model, ...aliases],
+        success: await this.invokeModel(model, key),
+      }))
+    );
+
+    // Filter out models that are disabled
+    const modelIds = results
+      .filter(({ success }) => success)
+      .flatMap(({ models }) => models);
+
+    if (modelIds.length === 0) {
+      this.log.warn(
+        { key: key.hash },
+        "Key does not have access to any models; disabling."
+      );
+      return this.updateKey(key.hash, { isDisabled: true });
+    }
+
+    this.updateKey(key.hash, {
+      modelIds,
+      modelFamilies: Array.from(
+        new Set(modelIds.map(getAwsBedrockModelFamily))
+      ),
+    });
 
     this.log.info(
       {
@@ -222,6 +255,10 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
       status === 403 &&
       errorMessage?.match(/access to the model with the specified model ID/)
     ) {
+      this.log.debug(
+        { key: key.hash, model, errorType, data, status, headers },
+        "Model is not available (principal does not have access)."
+      );
       return false;
     }
 
@@ -230,7 +267,7 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
     if (status === 404) {
       this.log.debug(
         { region: creds.region, model, key: key.hash },
-        "Model not supported in this AWS region."
+        "Model is not available (not supported in this AWS region)."
       );
       return false;
     }
@@ -242,14 +279,14 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
     if (!correctErrorType || !correctErrorMessage) {
       this.log.debug(
         { key: key.hash, model, errorType, data, status },
-        "AWS InvokeModel test unsuccessful."
+        "Model is not available (request rejected)."
       );
       return false;
     }
 
     this.log.debug(
       { key: key.hash, model, errorType, data, status },
-      "AWS InvokeModel test successful."
+      "Model is available."
     );
     return true;
   }
@@ -283,7 +320,7 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
     if (status === 403 || status === 404) {
       this.log.debug(
         { key: key.hash, model, errorType, data, status },
-        "AWS InvokeModel test returned 403 or 404."
+        "Model is not available (no access or unsupported region)."
       );
       return false;
     }
@@ -293,16 +330,36 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
     if (isBadRequest && !isValidationError) {
       this.log.debug(
         { key: key.hash, model, errorType, data, status, headers },
-        "AWS InvokeModel test returned 400 but not a validation error."
+        "Model is not available (request rejected)."
       );
       return false;
     }
 
     this.log.debug(
       { key: key.hash, model, errorType, data, status },
-      "AWS InvokeModel test successful."
+      "Model is available."
     );
     return true;
+  }
+
+  private async checkInferenceProfiles(key: AwsBedrockKey) {
+    const creds = AwsKeyChecker.getCredentialsFromKey(key);
+    const req: AxiosRequestConfig = {
+      method: "GET",
+      url: GET_LIST_INFERENCE_PROFILES_URL(creds.region),
+      headers: { accept: "application/json" },
+    };
+    await AwsKeyChecker.signRequestForAws(req, key);
+    const { data } = await axios.request<GetInferenceProfilesResponse>(req);
+    const { inferenceProfileSummaries } = data;
+    const profileIds = inferenceProfileSummaries.map(
+      (p) => p.inferenceProfileId
+    );
+    this.log.debug(
+      { key: key.hash, profileIds, region: creds.region },
+      "Inference profiles found."
+    );
+    this.updateKey(key.hash, { inferenceProfileIds: profileIds });
   }
 
   private async checkLoggingConfiguration(key: AwsBedrockKey) {
@@ -373,7 +430,8 @@ export class AwsKeyChecker extends KeyCheckerBase<AwsBedrockKey> {
       method,
       protocol: "https:",
       hostname: url.hostname,
-      path: url.pathname + url.search,
+      path: url.pathname,
+      query: Object.fromEntries(url.searchParams),
       headers: { Host: url.hostname, ...plainHeaders },
     });
 
