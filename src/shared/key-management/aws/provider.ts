@@ -22,6 +22,7 @@ export interface AwsBedrockKey extends Key, AwsBedrockKeyUsage {
    */
   awsLoggingStatus: "unknown" | "disabled" | "enabled";
   modelIds: string[];
+  inferenceProfileIds: string[];
 }
 
 /**
@@ -72,6 +73,7 @@ export class AwsBedrockKeyProvider implements KeyProvider<AwsBedrockKey> {
           .slice(0, 8)}`,
         lastChecked: 0,
         modelIds: ["anthropic.claude-3-sonnet-20240229-v1:0"],
+        inferenceProfileIds: [],
         ["aws-claudeTokens"]: 0,
         ["aws-claude-opusTokens"]: 0,
         ["aws-mistral-tinyTokens"]: 0,
@@ -135,7 +137,21 @@ export class AwsBedrockKeyProvider implements KeyProvider<AwsBedrockKey> {
       );
     }
 
-    const selectedKey = prioritizeKeys(availableKeys)[0];
+    /**
+     * Comparator for prioritizing keys on inference profile compatibility.
+     * Requests made via inference profiles have higher rate limits so we want
+     * to use keys with compatible inference profiles first.
+     */
+    const hasInferenceProfile = (
+      a: AwsBedrockKey,
+      b: AwsBedrockKey
+    ) => {
+      const aMatch = +a.inferenceProfileIds.some((p) => p.includes(model));
+      const bMatch = +b.inferenceProfileIds.some((p) => p.includes(model));
+      return aMatch - bMatch;
+    };
+
+    const selectedKey = prioritizeKeys(availableKeys, hasInferenceProfile)[0];
     selectedKey.lastUsed = Date.now();
     this.throttle(selectedKey.hash);
     return { ...selectedKey };
