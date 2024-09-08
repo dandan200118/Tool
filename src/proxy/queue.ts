@@ -46,6 +46,7 @@ const PAYLOAD_SCALE_FACTOR = parseFloat(
   process.env.PAYLOAD_SCALE_FACTOR ?? "6"
 );
 const QUEUE_JOIN_TIMEOUT = 5000;
+const TOKENS_PUNISHMENT_FACTOR = parseFloat(process.env.TOKENS_PUNISHMENT_FACTOR ?? "0.0");
 
 /**
  * Returns an identifier for a request. This is used to determine if a
@@ -140,7 +141,7 @@ export function dequeue(partition: ModelFamily): Request | undefined {
   }
 
   const req = modelQueue.reduce((prev, curr) =>
-    prev.startTime < curr.startTime ? prev : curr
+    prev.startTime + TOKENS_PUNISHMENT_FACTOR*((prev.promptTokens ?? 0) + (prev.outputTokens ?? 0)) < curr.startTime + TOKENS_PUNISHMENT_FACTOR*((curr.promptTokens ?? 0) + (curr.outputTokens ?? 0)) ? prev : curr
   );
   queue.splice(queue.indexOf(req), 1);
 
