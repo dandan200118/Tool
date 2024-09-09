@@ -378,6 +378,13 @@ type Config = {
    * Takes precedence over the adminWhitelist.
    */
   ipBlacklist: string[];
+  /**
+   * If set, pushes requests further back into the queue according to their
+   * token costs by factor*tokens*milliseconds (or more intuitively
+   * factor*thousands_of_tokens*seconds).
+   * Accepts floats.
+   */
+  tokensPunishmentFactor: number;
 };
 
 // To change configs, create a file called .env in the root directory.
@@ -483,6 +490,7 @@ export const config: Config = {
     getEnvWithDefault("ADMIN_WHITELIST", "0.0.0.0/0,::/0")
   ),
   ipBlacklist: parseCsv(getEnvWithDefault("IP_BLACKLIST", "")),
+  tokensPunishmentFactor: getEnvWithDefault("TOKENS_PUNISHMENT_FACTOR", 0.0),
 } as const;
 
 function generateSigningKey() {
