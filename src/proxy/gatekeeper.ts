@@ -1,7 +1,7 @@
 import type { Request, Response, RequestHandler } from "express";
 import { config } from "../config";
 import { authenticate, getUser } from "../shared/users/user-store";
-import { sendErrorToClient } from "./middleware/response/error-generator";
+//import { sendErrorToClient } from "./middleware/response/error-generator";
 
 const GATEKEEPER = config.gatekeeper;
 const PROXY_KEY = config.proxyKey;
