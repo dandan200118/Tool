@@ -10,7 +10,7 @@ import { googleAI } from "./google-ai";
 import { mistralAI } from "./mistral-ai";
 import { openai } from "./openai";
 import { openaiImage } from "./openai-image";
-import { sendErrorToClient } from "./middleware/response/error-generator";
+//import { sendErrorToClient } from "./middleware/response/error-generator";
 
 const proxyRouter = express.Router();
 
