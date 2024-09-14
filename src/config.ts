@@ -385,6 +385,36 @@ type Config = {
    * Accepts floats.
    */
   tokensPunishmentFactor: number;
+  /**
+   * Configuration for HTTP requests made by the proxy to other servers, such
+   * as when checking keys or forwarding users' requests to external services.
+   * If not set, all requests will be made using the default agent.
+   *
+   * If set, the proxy may make requests to other servers using the specified
+   * settings. This is useful if you wish to route users' requests through
+   * another proxy or VPN, or if you have multiple network interfaces and want
+   * to use a specific one for outgoing requests.
+   */
+  httpAgent?: {
+    /**
+     * The name of the network interface to use. The first external IPv4 address
+     * belonging to this interface will be used for outgoing requests.
+     */
+    interface?: string;
+    /**
+     * The URL of a proxy server to use. Supports SOCKS4, SOCKS5, HTTP, and
+     * HTTPS. If not set, the proxy will be made using the default agent.
+     * - SOCKS4: `socks4://some-socks-proxy.com:9050`
+     * - SOCKS5: `socks5://username:password@some-socks-proxy.com:9050`
+     * - HTTP: `http://proxy-server-over-tcp.com:3128`
+     * - HTTPS: `https://proxy-server-over-tls.com:3129`
+     *
+     * **Note:** If your proxy server issues a certificate, you may need to set
+     * `NODE_EXTRA_CA_CERTS` to the path to your certificate, otherwise this
+     * application will reject TLS connections.
+     */
+    proxyUrl?: string;
+  };
 };
 
 // To change configs, create a file called .env in the root directory.
@@ -491,6 +521,10 @@ export const config: Config = {
   ),
   ipBlacklist: parseCsv(getEnvWithDefault("IP_BLACKLIST", "")),
   tokensPunishmentFactor: getEnvWithDefault("TOKENS_PUNISHMENT_FACTOR", 0.0),
+  httpAgent: {
+    interface: getEnvWithDefault("HTTP_AGENT_INTERFACE", undefined),
+    proxyUrl: getEnvWithDefault("HTTP_AGENT_PROXY_URL", undefined),
+  },
 } as const;
 
 function generateSigningKey() {
@@ -610,6 +644,18 @@ export async function assertConfigIsValid() {
     );
   }
 
+  if (Object.values(config.httpAgent || {}).filter(Boolean).length === 0) {
+    delete config.httpAgent;
+  } else if (config.httpAgent) {
+    if (config.httpAgent.interface && config.httpAgent.proxyUrl) {
+      throw new Error(
+        "Cannot set both `HTTP_AGENT_INTERFACE` and `HTTP_AGENT_PROXY_URL`."
+      );
+    }
+  }
+
+  startupLogger.info("Configs checked.");
+
   // Ensure forks which add new secret-like config keys don't unwittingly expose
   // them to users.
   for (const key of getKeys(config)) {
@@ -623,15 +669,16 @@ export async function assertConfigIsValid() {
         `Config key "${key}" may be sensitive but is exposed. Add it to SENSITIVE_KEYS or OMITTED_KEYS.`
       );
   }
-
-  await maybeInitializeFirebase();
 }
 
 /**
  * Config keys that are masked on the info page, but not hidden as their
  * presence may be relevant to the user due to privacy implications.
  */
-export const SENSITIVE_KEYS: (keyof Config)[] = ["googleSheetsSpreadsheetId"];
+export const SENSITIVE_KEYS: (keyof Config)[] = [
+  "googleSheetsSpreadsheetId",
+  "httpAgent",
+];
 
 /**
  * Config keys that are not displayed on the info page at all, generally because
@@ -753,32 +800,6 @@ function getEnvWithDefault<T>(env: string | string[], defaultValue: T): T {
   } catch (err) {
     return value as unknown as T;
   }
-}
-
-let firebaseApp: firebase.app.App | undefined;
-
-async function maybeInitializeFirebase() {
-  if (!config.gatekeeperStore.startsWith("firebase")) {
-    return;
-  }
-
-  const firebase = await import("firebase-admin");
-  const firebaseKey = Buffer.from(config.firebaseKey!, "base64").toString();
-  const app = firebase.initializeApp({
-    credential: firebase.credential.cert(JSON.parse(firebaseKey)),
-    databaseURL: config.firebaseRtdbUrl,
-  });
-
-  await app.database().ref("connection-test").set(Date.now());
-
-  firebaseApp = app;
-}
-
-export function getFirebaseApp(): firebase.app.App {
-  if (!firebaseApp) {
-    throw new Error("Firebase app not initialized.");
-  }
-  return firebaseApp;
 }
 
 function parseCsv(val: string): string[] {
