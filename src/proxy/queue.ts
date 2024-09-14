@@ -26,7 +26,7 @@ import { logger } from "../logger";
 import { getUniqueIps } from "./rate-limit";
 import { RequestPreprocessor } from "./middleware/request";
 import { handleProxyError } from "./middleware/common";
-import { sendErrorToClient } from "./middleware/response/error-generator";
+//import { sendErrorToClient } from "./middleware/response/error-generator";
 
 const queue: Request[] = [];
 const log = logger.child({ module: "request-queue" });
