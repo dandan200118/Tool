@@ -16,7 +16,7 @@ import {
   ProxyResHandlerWithBody,
   createOnProxyResHandler,
 } from "./middleware/response";
-import { sendErrorToClient } from "./middleware/response/error-generator";
+//import { sendErrorToClient } from "./middleware/response/error-generator";
 
 let modelsCache: any = null;
 let modelsCacheTime = 0;
