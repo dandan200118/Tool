@@ -13,7 +13,7 @@ import {
 import { reenqueueRequest } from "../../queue";
 import type { RawResponseBodyHandler } from ".";
 import { handleBlockingResponse } from "./handle-blocking-response";
-import { buildSpoofedSSE, sendErrorToClient } from "./error-generator";
+//import { buildSpoofedSSE, sendErrorToClient } from "./error-generator";
 import { getAwsEventStreamDecoder } from "./streaming/aws-event-stream-decoder";
 import { EventAggregator } from "./streaming/event-aggregator";
 import { SSEMessageTransformer } from "./streaming/sse-message-transformer";
