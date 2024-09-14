@@ -67,6 +67,9 @@ async function getTokenCountForMessages({
         case "image":
           numTokens += await getImageTokenCount(part.source.data);
           break;
+        case "tool_use":
+        case "tool_result":
+          break;
         default:
           throw new Error(`Unsupported Anthropic content type.`);
       }

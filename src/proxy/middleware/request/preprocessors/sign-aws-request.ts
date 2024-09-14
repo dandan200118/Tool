@@ -144,6 +144,8 @@ function applyAwsStrictValidation(req: Request): unknown {
         temperature: true,
         top_k: true,
         top_p: true,
+        tools: true,
+        tool_choice: true,
       })
         .strip()
         .parse(req.body);

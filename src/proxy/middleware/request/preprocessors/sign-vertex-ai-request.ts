@@ -24,7 +24,6 @@ export const signGcpRequest: RequestPreprocessor = async (req) => {
   req.isStreaming = String(stream) === "true";
 
   // TODO: This should happen in transform-outbound-payload.ts
-  // TODO: Support tools
   let strippedParams: Record<string, unknown>;
   strippedParams = AnthropicV1MessagesSchema.pick({
     messages: true,
@@ -34,6 +33,8 @@ export const signGcpRequest: RequestPreprocessor = async (req) => {
     temperature: true,
     top_k: true,
     top_p: true,
+    tools: true,
+    tool_choice: true,
     stream: true,
   })
     .strip()
